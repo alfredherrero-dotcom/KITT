@@ -139,11 +139,16 @@ class PanelActivity : AppCompatActivity() {
             allowFileAccess = true
             databaseEnabled = true
 
-            // Android WebView appends "; wv)" to the default user agent to mark
-            // itself as an embedded WebView. The dashboard server rejects that
-            // marker as unauthorized (it works fine in a real Chrome tab, which
-            // has no "wv" marker), so we present a plain Chrome user agent here.
-            userAgentString = userAgentString?.replace("; wv", "")
+            // Android WebView's default user agent carries two markers that
+            // real Chrome never sends: "; wv)" and "Version/4.0 ". The
+            // dashboard server treats requests bearing either marker
+            // differently (stripping only "; wv" still left it distinguishable
+            // and got a 404 instead of the real page), so build a UA that
+            // matches a genuine Chrome-on-Android tab byte-for-byte in format.
+            userAgentString =
+                "Mozilla/5.0 (Linux; Android ${Build.VERSION.RELEASE}) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/124.0.0.0 Mobile Safari/537.36"
         }
 
         val cookieManager = CookieManager.getInstance()
