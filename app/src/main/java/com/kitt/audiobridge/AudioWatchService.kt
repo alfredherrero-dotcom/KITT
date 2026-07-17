@@ -3,6 +3,7 @@ package com.kitt.audiobridge
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.media.AudioAttributes
@@ -11,6 +12,7 @@ import android.media.AudioPlaybackConfiguration
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import java.io.File
@@ -33,12 +35,19 @@ class AudioWatchService : Service() {
         private const val SILENCE_DEBOUNCE_MS = 700L
         private const val NOTIFICATION_CHANNEL_ID = "kitt_audio_bridge_status"
         private const val NOTIFICATION_ID = 1
+        private const val EDGE_HANDLE_REQUEST_CODE = 10
+
+        const val ACTION_SYNC_EDGE_HANDLE = "com.kitt.audiobridge.action.SYNC_EDGE_HANDLE"
+        const val ACTION_TOGGLE_EDGE_HANDLE = "com.kitt.audiobridge.action.TOGGLE_EDGE_HANDLE"
     }
 
     private lateinit var audioManager: AudioManager
     private lateinit var handlerThread: HandlerThread
     private lateinit var handler: Handler
     private lateinit var notificationManager: NotificationManager
+    private lateinit var edgeHandleOverlay: EdgeHandleOverlay
+
+    private var lastNotificationText = ""
 
     private var currentState = false
     private var pendingSilenceRunnable: Runnable? = null
@@ -81,18 +90,29 @@ class AudioWatchService : Service() {
         super.onCreate()
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        edgeHandleOverlay = EdgeHandleOverlay(this)
 
         handlerThread = HandlerThread("KITTAudioWatchThread")
         handlerThread.start()
         handler = Handler(handlerThread.looper)
 
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.notification_text_silence)))
+        lastNotificationText = getString(R.string.notification_text_silence)
+        startForeground(NOTIFICATION_ID, buildNotification(lastNotificationText))
 
         audioManager.registerAudioPlaybackCallback(playbackCallback, handler)
+
+        syncEdgeHandleVisibility()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_TOGGLE_EDGE_HANDLE -> {
+                AppPreferences.setEdgeHandleEnabled(this, !AppPreferences.isEdgeHandleEnabled(this))
+                syncEdgeHandleVisibility()
+            }
+            ACTION_SYNC_EDGE_HANDLE -> syncEdgeHandleVisibility()
+        }
         return START_STICKY
     }
 
@@ -100,7 +120,14 @@ class AudioWatchService : Service() {
         audioManager.unregisterAudioPlaybackCallback(playbackCallback)
         pendingSilenceRunnable?.let { handler.removeCallbacks(it) }
         handlerThread.quitSafely()
+        edgeHandleOverlay.hide()
         super.onDestroy()
+    }
+
+    private fun syncEdgeHandleVisibility() {
+        val shouldShow = AppPreferences.isEdgeHandleEnabled(this) && Settings.canDrawOverlays(this)
+        if (shouldShow) edgeHandleOverlay.show() else edgeHandleOverlay.hide()
+        notificationManager.notify(NOTIFICATION_ID, buildNotification(lastNotificationText))
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -110,18 +137,18 @@ class AudioWatchService : Service() {
             val file = File(FLAG_FILE_PATH)
             file.parentFile?.mkdirs()
             file.writeText(if (active) "1" else "0")
-            val text = getString(
+            lastNotificationText = getString(
                 if (active) R.string.notification_text_playing else R.string.notification_text_silence
             )
-            notificationManager.notify(NOTIFICATION_ID, buildNotification(text))
+            notificationManager.notify(NOTIFICATION_ID, buildNotification(lastNotificationText))
         } catch (e: IOException) {
             Log.e(TAG, "Failed to write flag file", e)
-            val text = getString(R.string.notification_text_error, e.message ?: e.toString())
-            notificationManager.notify(NOTIFICATION_ID, buildNotification(text))
+            lastNotificationText = getString(R.string.notification_text_error, e.message ?: e.toString())
+            notificationManager.notify(NOTIFICATION_ID, buildNotification(lastNotificationText))
         } catch (e: SecurityException) {
             Log.e(TAG, "Failed to write flag file", e)
-            val text = getString(R.string.notification_text_error, e.message ?: e.toString())
-            notificationManager.notify(NOTIFICATION_ID, buildNotification(text))
+            lastNotificationText = getString(R.string.notification_text_error, e.message ?: e.toString())
+            notificationManager.notify(NOTIFICATION_ID, buildNotification(lastNotificationText))
         }
     }
 
@@ -135,12 +162,27 @@ class AudioWatchService : Service() {
     }
 
     private fun buildNotification(contentText: String): Notification {
+        val edgeHandleEnabled = AppPreferences.isEdgeHandleEnabled(this)
+        val toggleIntent = Intent(this, AudioWatchService::class.java).apply {
+            action = ACTION_TOGGLE_EDGE_HANDLE
+        }
+        val togglePendingIntent = PendingIntent.getService(
+            this,
+            EDGE_HANDLE_REQUEST_CODE,
+            toggleIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val toggleActionLabel = getString(
+            if (edgeHandleEnabled) R.string.notification_action_hide_tab else R.string.notification_action_show_tab
+        )
+
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .addAction(0, toggleActionLabel, togglePendingIntent)
             .build()
     }
 }

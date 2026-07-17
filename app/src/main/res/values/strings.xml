@@ -28,4 +28,10 @@
     <string name="panel_launcher_label">KITT</string>
     <string name="panel_connecting">Conectando con el panel…</string>
     <string name="panel_back_to_exit">Pulsa otra vez para salir</string>
+
+    <string name="button_overlay_permission">Permiso de superposición</string>
+    <string name="switch_edge_handle">Pestaña KITT</string>
+    <string name="toast_overlay_permission_needed">Concede el permiso de superposición para usar la pestaña</string>
+    <string name="notification_action_show_tab">Mostrar pestaña</string>
+    <string name="notification_action_hide_tab">Ocultar pestaña</string>
 </resources>

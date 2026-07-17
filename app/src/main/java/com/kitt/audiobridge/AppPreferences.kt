@@ -9,6 +9,9 @@ object AppPreferences {
     private const val PREFS_NAME = "kitt_prefs"
     private const val KEY_PANEL_URL = "panel_url"
     private const val KEY_AUTOSTART_PANEL = "autostart_panel"
+    private const val KEY_EDGE_HANDLE_ENABLED = "edge_handle_enabled"
+    private const val KEY_EDGE_HANDLE_DOCKED_RIGHT = "edge_handle_docked_right"
+    private const val KEY_EDGE_HANDLE_Y = "edge_handle_y"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -25,5 +28,27 @@ object AppPreferences {
 
     fun setAutostartPanelEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_AUTOSTART_PANEL, enabled).apply()
+    }
+
+    fun isEdgeHandleEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EDGE_HANDLE_ENABLED, false)
+
+    fun setEdgeHandleEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_EDGE_HANDLE_ENABLED, enabled).apply()
+    }
+
+    fun isEdgeHandleDockedRight(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EDGE_HANDLE_DOCKED_RIGHT, true)
+
+    fun setEdgeHandleDockedRight(context: Context, dockedRight: Boolean) {
+        prefs(context).edit().putBoolean(KEY_EDGE_HANDLE_DOCKED_RIGHT, dockedRight).apply()
+    }
+
+    /** Returns the persisted Y offset in px, or -1 if never positioned. */
+    fun getEdgeHandleY(context: Context): Int =
+        prefs(context).getInt(KEY_EDGE_HANDLE_Y, -1)
+
+    fun setEdgeHandleY(context: Context, y: Int) {
+        prefs(context).edit().putInt(KEY_EDGE_HANDLE_Y, y).apply()
     }
 }

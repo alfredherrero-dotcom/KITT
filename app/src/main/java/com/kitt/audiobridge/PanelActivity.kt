@@ -87,6 +87,14 @@ class PanelActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         applyImmersiveMode()
+        AppState.panelVisible.value = true
+        AppState.requestMinimizePanel = { moveTaskToBack(true) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        AppState.panelVisible.value = false
+        AppState.requestMinimizePanel = null
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

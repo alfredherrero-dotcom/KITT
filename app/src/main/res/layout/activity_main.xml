@@ -77,6 +77,20 @@
             android:layout_marginTop="16dp"
             android:text="@string/checkbox_autostart_panel" />
 
+        <Button
+            android:id="@+id/button_overlay_permission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/button_overlay_permission" />
+
+        <Switch
+            android:id="@+id/switch_edge_handle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/switch_edge_handle" />
+
     </LinearLayout>
 
 </ScrollView>

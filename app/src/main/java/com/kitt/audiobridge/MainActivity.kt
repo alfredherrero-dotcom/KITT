@@ -12,7 +12,9 @@ import android.os.Looper
 import android.provider.Settings
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.CompoundButton
 import android.widget.EditText
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -32,6 +34,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var textStatusFile: TextView
     private lateinit var textStatusState: TextView
     private lateinit var buttonToggleService: Button
+    private lateinit var switchEdgeHandle: Switch
+
+    private val edgeHandleCheckedChangeListener =
+        CompoundButton.OnCheckedChangeListener { _, isChecked -> onEdgeHandleSwitchChanged(isChecked) }
 
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshRunnable = object : Runnable {
@@ -77,6 +83,14 @@ class MainActivity : AppCompatActivity() {
             AppPreferences.setAutostartPanelEnabled(this, isChecked)
         }
 
+        findViewById<Button>(R.id.button_overlay_permission).setOnClickListener {
+            openOverlayPermissionSettings()
+        }
+
+        switchEdgeHandle = findViewById(R.id.switch_edge_handle)
+        switchEdgeHandle.isChecked = AppPreferences.isEdgeHandleEnabled(this) && Settings.canDrawOverlays(this)
+        switchEdgeHandle.setOnCheckedChangeListener(edgeHandleCheckedChangeListener)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPostNotificationsPermission()
         }
@@ -118,6 +132,40 @@ class MainActivity : AppCompatActivity() {
             data = Uri.parse("package:$packageName")
         }
         startActivity(intent)
+    }
+
+    private fun openOverlayPermissionSettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName")
+        )
+        startActivity(intent)
+    }
+
+    private fun onEdgeHandleSwitchChanged(isChecked: Boolean) {
+        if (isChecked && !Settings.canDrawOverlays(this)) {
+            switchEdgeHandle.setOnCheckedChangeListener(null)
+            switchEdgeHandle.isChecked = false
+            switchEdgeHandle.setOnCheckedChangeListener(edgeHandleCheckedChangeListener)
+            Toast.makeText(this, R.string.toast_overlay_permission_needed, Toast.LENGTH_LONG).show()
+            openOverlayPermissionSettings()
+            return
+        }
+
+        AppPreferences.setEdgeHandleEnabled(this, isChecked)
+        val intent = Intent(this, AudioWatchService::class.java).apply {
+            action = AudioWatchService.ACTION_SYNC_EDGE_HANDLE
+        }
+        ContextCompat.startForegroundService(this, intent)
+    }
+
+    private fun syncEdgeHandleSwitch() {
+        val shouldBeChecked = AppPreferences.isEdgeHandleEnabled(this) && Settings.canDrawOverlays(this)
+        if (switchEdgeHandle.isChecked != shouldBeChecked) {
+            switchEdgeHandle.setOnCheckedChangeListener(null)
+            switchEdgeHandle.isChecked = shouldBeChecked
+            switchEdgeHandle.setOnCheckedChangeListener(edgeHandleCheckedChangeListener)
+        }
     }
 
     private fun startAudioWatchService() {
@@ -170,5 +218,7 @@ class MainActivity : AppCompatActivity() {
             "0" -> getString(R.string.status_last_state_silence)
             else -> getString(R.string.status_last_state_unknown)
         }
+
+        syncEdgeHandleSwitch()
     }
 }
