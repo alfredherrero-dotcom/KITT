@@ -15,6 +15,7 @@ import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
@@ -34,15 +35,8 @@ class PanelActivity : AppCompatActivity() {
         private const val BACK_PRESS_WINDOW_MS = 2000L
         private const val LOCATION_PERMISSION_REQUEST_CODE = 200
 
-        /*
-         * Durante las pruebas usamos la URL directamente para evitar que
-         * SharedPreferences conserve una URL anterior.
-         *
-         * Cuando todo funcione, puedes volver a usar:
-         * AppPreferences.getPanelUrl(this)
-         */
         private const val PANEL_URL =
-            "http://127.0.0.1:41088/storage/emulated/0/KITT/index.html"
+            "http://localhost:41088/storage/emulated/0/KITT/index.html"
     }
 
     private lateinit var webView: WebView
@@ -75,15 +69,12 @@ class PanelActivity : AppCompatActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    val currentTime = System.currentTimeMillis()
+                    val now = System.currentTimeMillis()
 
-                    if (
-                        currentTime - lastBackPressTime <
-                        BACK_PRESS_WINDOW_MS
-                    ) {
+                    if (now - lastBackPressTime < BACK_PRESS_WINDOW_MS) {
                         finish()
                     } else {
-                        lastBackPressTime = currentTime
+                        lastBackPressTime = now
 
                         Toast.makeText(
                             this@PanelActivity,
@@ -117,9 +108,7 @@ class PanelActivity : AppCompatActivity() {
             window.decorView
         )
 
-        controller.hide(
-            WindowInsetsCompat.Type.systemBars()
-        )
+        controller.hide(WindowInsetsCompat.Type.systemBars())
 
         controller.systemBarsBehavior =
             WindowInsetsControllerCompat
@@ -141,26 +130,14 @@ class PanelActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
-
             allowContentAccess = true
             allowFileAccess = true
-
             databaseEnabled = true
-
-            userAgentString =
-                "Mozilla/5.0 (Linux; Android 13) " +
-                "AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) " +
-                "Chrome/120.0.0.0 Mobile Safari/537.36"
         }
 
         val cookieManager = CookieManager.getInstance()
-
         cookieManager.setAcceptCookie(true)
-        cookieManager.setAcceptThirdPartyCookies(
-            webView,
-            true
-        )
+        cookieManager.setAcceptThirdPartyCookies(webView, true)
 
         webView.webChromeClient =
             object : WebChromeClient() {
@@ -169,18 +146,14 @@ class PanelActivity : AppCompatActivity() {
                     origin: String,
                     callback: GeolocationPermissions.Callback
                 ) {
-                    val permissionGranted =
+                    val granted =
                         ContextCompat.checkSelfPermission(
                             this@PanelActivity,
                             Manifest.permission.ACCESS_FINE_LOCATION
                         ) == PackageManager.PERMISSION_GRANTED
 
-                    if (permissionGranted) {
-                        callback.invoke(
-                            origin,
-                            true,
-                            false
-                        )
+                    if (granted) {
+                        callback.invoke(origin, true, false)
                     } else {
                         pendingGeoOrigin = origin
                         pendingGeoCallback = callback
@@ -204,60 +177,21 @@ class PanelActivity : AppCompatActivity() {
                     url: String?,
                     favicon: Bitmap?
                 ) {
-                    super.onPageStarted(
-                        view,
-                        url,
-                        favicon
-                    )
+                    super.onPageStarted(view, url, favicon)
 
                     lastLoadHadError = false
+                    retryText.text = getString(R.string.panel_connecting)
+                    retryText.visibility = View.VISIBLE
                 }
 
                 override fun onPageFinished(
                     view: WebView?,
                     url: String?
                 ) {
-                    super.onPageFinished(
-                        view,
-                        url
-                    )
+                    super.onPageFinished(view, url)
 
-                    /*
-                     * Un servidor puede devolver una página 401 o 403
-                     * sin activar onReceivedError().
-                     *
-                     * Por eso comprobamos también el contenido visible.
-                     */
-                    view?.evaluateJavascript(
-                        """
-                        (function() {
-                            var text =
-                                document.body
-                                ? document.body.innerText
-                                : '';
-
-                            return text.substring(0, 500);
-                        })();
-                        """.trimIndent()
-                    ) { result ->
-
-                        val pageText =
-                            result
-                                ?.lowercase()
-                                .orEmpty()
-
-                        val unauthorized =
-                            pageText.contains("unauthorized") ||
-                            pageText.contains("401")
-
-                        if (unauthorized) {
-                            lastLoadHadError = true
-                            showErrorScreen(
-                                "Error 401: el servidor ha rechazado la petición"
-                            )
-                        } else if (!lastLoadHadError) {
-                            hideRetryScreen()
-                        }
+                    if (!lastLoadHadError) {
+                        hideRetryScreen()
                     }
                 }
 
@@ -266,25 +200,45 @@ class PanelActivity : AppCompatActivity() {
                     request: WebResourceRequest?,
                     error: WebResourceError?
                 ) {
-                    super.onReceivedError(
+                    super.onReceivedError(view, request, error)
+
+                    if (request?.isForMainFrame == true) {
+                        lastLoadHadError = true
+
+                        val errorCode = error?.errorCode ?: -1
+                        val description =
+                            error?.description?.toString()
+                                ?: "Error de conexión"
+
+                        showErrorScreen(
+                            "Error $errorCode: $description"
+                        )
+                    }
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    errorResponse: WebResourceResponse?
+                ) {
+                    super.onReceivedHttpError(
                         view,
                         request,
-                        error
+                        errorResponse
                     )
 
                     if (request?.isForMainFrame == true) {
                         lastLoadHadError = true
 
-                        val errorCode =
-                            error?.errorCode ?: -1
+                        val statusCode =
+                            errorResponse?.statusCode ?: -1
 
-                        val description =
-                            error?.description
-                                ?.toString()
-                                ?: "Error desconocido"
+                        val reason =
+                            errorResponse?.reasonPhrase
+                                ?: "Error HTTP"
 
                         showErrorScreen(
-                            "Error $errorCode: $description"
+                            "Error HTTP $statusCode: $reason"
                         )
                     }
                 }
@@ -301,45 +255,18 @@ class PanelActivity : AppCompatActivity() {
     private fun loadPanel() {
         lastLoadHadError = false
 
-        retryText.text =
-            getString(R.string.panel_connecting)
-
-        retryText.visibility = View.VISIBLE
         webView.visibility = View.INVISIBLE
+        retryText.text = getString(R.string.panel_connecting)
+        retryText.visibility = View.VISIBLE
 
-        /*
-         * Usamos la URL fija mientras diagnosticamos.
-         */
         webView.loadUrl(PANEL_URL)
-
-        /*
-         * Cuando funcione correctamente, puedes sustituir
-         * la línea anterior por:
-         *
-         * webView.loadUrl(
-         *     AppPreferences.getPanelUrl(this)
-         * )
-         */
     }
 
-    private fun showErrorScreen(
-        message: String
-    ) {
+    private fun showErrorScreen(message: String) {
         webView.visibility = View.INVISIBLE
 
         retryText.text =
             "$message\n\nReintentando..."
-
-        retryText.visibility = View.VISIBLE
-
-        scheduleRetry()
-    }
-
-    private fun showRetryScreen() {
-        webView.visibility = View.INVISIBLE
-
-        retryText.text =
-            getString(R.string.panel_connecting)
 
         retryText.visibility = View.VISIBLE
 
@@ -381,27 +308,16 @@ class PanelActivity : AppCompatActivity() {
             grantResults
         )
 
-        if (
-            requestCode ==
-            LOCATION_PERMISSION_REQUEST_CODE
-        ) {
-            val permissionGranted =
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            val granted =
                 grantResults.isNotEmpty() &&
-                grantResults[0] ==
-                PackageManager.PERMISSION_GRANTED
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED
 
             val origin = pendingGeoOrigin
             val callback = pendingGeoCallback
 
-            if (
-                origin != null &&
-                callback != null
-            ) {
-                callback.invoke(
-                    origin,
-                    permissionGranted,
-                    false
-                )
+            if (origin != null && callback != null) {
+                callback.invoke(origin, granted, false)
             }
 
             pendingGeoOrigin = null
@@ -412,11 +328,9 @@ class PanelActivity : AppCompatActivity() {
     override fun onDestroy() {
         retryHandler.removeCallbacksAndMessages(null)
 
-        pendingGeoCallback?.invoke(
-            pendingGeoOrigin ?: "",
-            false,
-            false
-        )
+        pendingGeoOrigin?.let { origin ->
+            pendingGeoCallback?.invoke(origin, false, false)
+        }
 
         pendingGeoOrigin = null
         pendingGeoCallback = null
