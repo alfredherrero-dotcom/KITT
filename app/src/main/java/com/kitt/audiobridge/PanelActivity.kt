@@ -130,6 +130,12 @@ class PanelActivity : AppCompatActivity() {
             allowContentAccess = true
             allowFileAccess = true
             databaseEnabled = true
+
+            // Android WebView appends "; wv)" to the default user agent to mark
+            // itself as an embedded WebView. The dashboard server rejects that
+            // marker as unauthorized (it works fine in a real Chrome tab, which
+            // has no "wv" marker), so we present a plain Chrome user agent here.
+            userAgentString = userAgentString?.replace("; wv", "")
         }
 
         val cookieManager = CookieManager.getInstance()
