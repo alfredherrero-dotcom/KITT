@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">KITT Audio Bridge</string>
+
+    <string name="status_service_running">Servicio: en ejecución</string>
+    <string name="status_service_stopped">Servicio: detenido</string>
+    <string name="status_file_writable">Archivo: escribible</string>
+    <string name="status_file_not_writable">Archivo: no escribible (falta permiso de archivos)</string>
+    <string name="status_last_state_playing">Último estado: reproduciendo (1)</string>
+    <string name="status_last_state_silence">Último estado: silencio (0)</string>
+    <string name="status_last_state_unknown">Último estado: desconocido</string>
+
+    <string name="button_files_permission">Permiso de archivos</string>
+    <string name="button_battery_optimization">Ignorar optimización de batería</string>
+    <string name="button_start_service">Iniciar servicio</string>
+    <string name="button_stop_service">Detener servicio</string>
+
+    <string name="notification_channel_name">Estado de audio KITT</string>
+    <string name="notification_title">KITT Audio Bridge</string>
+    <string name="notification_text_playing">Reproduciendo → 1</string>
+    <string name="notification_text_silence">Silencio → 0</string>
+    <string name="notification_text_error">Error al escribir archivo: %1$s</string>
+</resources>
