@@ -92,36 +92,20 @@ class PanelActivity : AppCompatActivity() {
     }
 
     private fun setupWebView() {
-        webView.setBackgroundColor(Color.BLACK)
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.mediaPlaybackRequiresUserGesture = false
+    webView.settings.javaScriptEnabled = true
+    webView.settings.domStorageEnabled = true
+    webView.settings.mediaPlaybackRequiresUserGesture = false
 
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                lastLoadHadError = false
-            }
+    webView.settings.userAgentString =
+        "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
-            override fun onReceivedError(
-                view: WebView,
-                request: WebResourceRequest,
-                error: WebResourceError
-            ) {
-                if (request.isForMainFrame) {
-                    lastLoadHadError = true
-                    showRetryScreen()
-                }
-            }
+    val cookieManager = android.webkit.CookieManager.getInstance()
+    cookieManager.setAcceptCookie(true)
+    cookieManager.setAcceptThirdPartyCookies(webView, true)
 
-            override fun onPageFinished(view: WebView, url: String?) {
-                if (!lastLoadHadError) {
-                    hideRetryScreen()
-                }
-            }
-        }
-
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onGeolocationPermissionsShowPrompt(
+    webView.webViewClient = object : WebViewClient() {
+    override fun onGeolocationPermissionsShowPrompt(
                 origin: String,
                 callback: GeolocationPermissions.Callback
             ) {
