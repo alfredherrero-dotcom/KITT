@@ -34,9 +34,6 @@ class PanelActivity : AppCompatActivity() {
         private const val RETRY_INTERVAL_MS = 2000L
         private const val BACK_PRESS_WINDOW_MS = 2000L
         private const val LOCATION_PERMISSION_REQUEST_CODE = 200
-
-        private const val PANEL_URL =
-            "http://localhost:41088/storage/emulated/0/KITT/index.html"
     }
 
     private lateinit var webView: WebView
@@ -259,7 +256,7 @@ class PanelActivity : AppCompatActivity() {
         retryText.text = getString(R.string.panel_connecting)
         retryText.visibility = View.VISIBLE
 
-        webView.loadUrl(PANEL_URL)
+        webView.loadUrl(AppPreferences.getPanelUrl(this))
     }
 
     private fun showErrorScreen(message: String) {
