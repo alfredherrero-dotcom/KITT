@@ -4,7 +4,7 @@ import android.content.Context
 
 object AppPreferences {
 
-    const val DEFAULT_PANEL_URL = "http://192.168.1.106:48640/storage/emulated/0/KITT/index.html"
+    const val DEFAULT_PANEL_URL = "http://192.168.1.106:48640/"
 
     private const val PREFS_NAME = "kitt_prefs"
     private const val KEY_PANEL_URL = "panel_url"
