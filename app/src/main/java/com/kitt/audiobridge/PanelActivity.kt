@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -27,10 +28,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import java.io.ByteArrayInputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 class PanelActivity : AppCompatActivity() {
 
     companion object {
+        private const val TAG = "KITTPanel"
         private const val RETRY_INTERVAL_MS = 2000L
         private const val BACK_PRESS_WINDOW_MS = 2000L
         private const val LOCATION_PERMISSION_REQUEST_CODE = 200
@@ -265,7 +270,68 @@ class PanelActivity : AppCompatActivity() {
                 ): Boolean {
                     return false
                 }
+
+                // Android WebView silently attaches "X-Requested-With: <package
+                // name>" to every request it makes, which real Chrome never
+                // sends. A server checking for that header can tell it's being
+                // loaded inside an app's WebView (not a real browser tab) and
+                // respond differently — in this case a generic 404 instead of
+                // the dashboard. There's no WebSettings switch to disable that
+                // header, so GET requests are re-issued by hand without it.
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): WebResourceResponse? {
+                    if (!request.method.equals("GET", ignoreCase = true)) {
+                        return super.shouldInterceptRequest(view, request)
+                    }
+                    return proxyWithoutRequestedWithHeader(request)
+                }
             }
+    }
+
+    private fun proxyWithoutRequestedWithHeader(request: WebResourceRequest): WebResourceResponse? {
+        val url = request.url.toString()
+        return try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.instanceFollowRedirects = true
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+
+            for ((key, value) in request.requestHeaders) {
+                if (!key.equals("X-Requested-With", ignoreCase = true)) {
+                    connection.setRequestProperty(key, value)
+                }
+            }
+
+            val cookies = CookieManager.getInstance().getCookie(url)
+            if (!cookies.isNullOrEmpty()) {
+                connection.setRequestProperty("Cookie", cookies)
+            }
+
+            val statusCode = connection.responseCode
+            val statusMessage = connection.responseMessage ?: "OK"
+
+            connection.headerFields["Set-Cookie"]?.forEach { setCookie ->
+                CookieManager.getInstance().setCookie(url, setCookie)
+            }
+
+            val contentTypeHeader = connection.contentType ?: "text/html; charset=utf-8"
+            val mimeType = contentTypeHeader.substringBefore(";").trim().ifEmpty { "text/html" }
+            val charset = contentTypeHeader.substringAfter("charset=", "utf-8").substringBefore(";").trim()
+
+            val responseHeaders = connection.headerFields
+                .filterKeys { it != null }
+                .mapValues { it.value.joinToString(", ") }
+
+            val stream = (if (statusCode in 200..299) connection.inputStream else connection.errorStream)
+                ?: ByteArrayInputStream(ByteArray(0))
+
+            WebResourceResponse(mimeType, charset, statusCode, statusMessage, responseHeaders, stream)
+        } catch (e: Exception) {
+            Log.w(TAG, "Falling back to default loading for $url", e)
+            null
+        }
     }
 
     private fun loadPanel() {
