@@ -19,4 +19,13 @@
     <string name="notification_text_playing">Reproduciendo → 1</string>
     <string name="notification_text_silence">Silencio → 0</string>
     <string name="notification_text_error">Error al escribir archivo: %1$s</string>
+
+    <string name="label_panel_url">URL del panel</string>
+    <string name="button_save_url">Guardar URL</string>
+    <string name="toast_url_saved">URL guardada</string>
+    <string name="checkbox_autostart_panel">Abrir panel al arrancar</string>
+
+    <string name="panel_launcher_label">KITT</string>
+    <string name="panel_connecting">Conectando con el panel…</string>
+    <string name="panel_back_to_exit">Pulsa otra vez para salir</string>
 </resources>

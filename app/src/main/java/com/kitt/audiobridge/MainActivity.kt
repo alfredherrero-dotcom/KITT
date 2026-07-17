@@ -11,7 +11,10 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -56,6 +59,22 @@ class MainActivity : AppCompatActivity() {
         buttonToggleService.setOnClickListener {
             if (isServiceRunning()) stopAudioWatchService() else startAudioWatchService()
             updateStatus()
+        }
+
+        val editPanelUrl = findViewById<EditText>(R.id.edit_panel_url)
+        editPanelUrl.setText(AppPreferences.getPanelUrl(this))
+        findViewById<Button>(R.id.button_save_url).setOnClickListener {
+            val url = editPanelUrl.text.toString().trim()
+            if (url.isNotEmpty()) {
+                AppPreferences.setPanelUrl(this, url)
+                Toast.makeText(this, R.string.toast_url_saved, Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val checkboxAutostartPanel = findViewById<CheckBox>(R.id.checkbox_autostart_panel)
+        checkboxAutostartPanel.isChecked = AppPreferences.isAutostartPanelEnabled(this)
+        checkboxAutostartPanel.setOnCheckedChangeListener { _, isChecked ->
+            AppPreferences.setAutostartPanelEnabled(this, isChecked)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
