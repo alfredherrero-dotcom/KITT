@@ -91,6 +91,31 @@
             android:layout_marginTop="16dp"
             android:text="@string/switch_edge_handle" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/label_obd_device" />
+
+        <Spinner
+            android:id="@+id/spinner_obd_device"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/button_save_obd_device"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/button_save_obd_device" />
+
+        <Switch
+            android:id="@+id/switch_obd"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/switch_obd" />
+
     </LinearLayout>
 
 </ScrollView>

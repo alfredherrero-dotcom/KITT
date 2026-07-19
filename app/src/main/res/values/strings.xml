@@ -34,4 +34,14 @@
     <string name="toast_overlay_permission_needed">Concede el permiso de superposición para usar la pestaña</string>
     <string name="notification_action_show_tab">Mostrar pestaña</string>
     <string name="notification_action_hide_tab">Ocultar pestaña</string>
+
+    <string name="label_obd_device">Adaptador OBD (Bluetooth)</string>
+    <string name="button_save_obd_device">Guardar adaptador</string>
+    <string name="switch_obd">OBD</string>
+    <string name="obd_device_permission_needed">Concede el permiso de Bluetooth para ver los dispositivos</string>
+    <string name="obd_device_none_bonded">No hay dispositivos Bluetooth emparejados</string>
+    <string name="toast_obd_device_saved">Adaptador guardado</string>
+    <string name="toast_obd_no_device_selected">Selecciona y guarda un adaptador primero</string>
+    <string name="notification_action_obd_on">Activar OBD</string>
+    <string name="notification_action_obd_off">Desactivar OBD</string>
 </resources>

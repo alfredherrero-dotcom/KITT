@@ -36,9 +36,12 @@ class AudioWatchService : Service() {
         private const val NOTIFICATION_CHANNEL_ID = "kitt_audio_bridge_status"
         private const val NOTIFICATION_ID = 1
         private const val EDGE_HANDLE_REQUEST_CODE = 10
+        private const val OBD_REQUEST_CODE = 11
 
         const val ACTION_SYNC_EDGE_HANDLE = "com.kitt.audiobridge.action.SYNC_EDGE_HANDLE"
         const val ACTION_TOGGLE_EDGE_HANDLE = "com.kitt.audiobridge.action.TOGGLE_EDGE_HANDLE"
+        const val ACTION_SYNC_OBD = "com.kitt.audiobridge.action.SYNC_OBD"
+        const val ACTION_TOGGLE_OBD = "com.kitt.audiobridge.action.TOGGLE_OBD"
     }
 
     private lateinit var audioManager: AudioManager
@@ -46,6 +49,7 @@ class AudioWatchService : Service() {
     private lateinit var handler: Handler
     private lateinit var notificationManager: NotificationManager
     private lateinit var edgeHandleOverlay: EdgeHandleOverlay
+    private lateinit var obdManager: ObdManager
 
     private var lastNotificationText = ""
 
@@ -91,6 +95,7 @@ class AudioWatchService : Service() {
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         edgeHandleOverlay = EdgeHandleOverlay(this)
+        obdManager = ObdManager(this)
 
         handlerThread = HandlerThread("KITTAudioWatchThread")
         handlerThread.start()
@@ -103,6 +108,7 @@ class AudioWatchService : Service() {
         audioManager.registerAudioPlaybackCallback(playbackCallback, handler)
 
         syncEdgeHandleVisibility()
+        syncObdState()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -112,6 +118,11 @@ class AudioWatchService : Service() {
                 syncEdgeHandleVisibility()
             }
             ACTION_SYNC_EDGE_HANDLE -> syncEdgeHandleVisibility()
+            ACTION_TOGGLE_OBD -> {
+                AppPreferences.setObdEnabled(this, !AppPreferences.isObdEnabled(this))
+                syncObdState()
+            }
+            ACTION_SYNC_OBD -> syncObdState()
         }
         return START_STICKY
     }
@@ -121,12 +132,18 @@ class AudioWatchService : Service() {
         pendingSilenceRunnable?.let { handler.removeCallbacks(it) }
         handlerThread.quitSafely()
         edgeHandleOverlay.hide()
+        obdManager.stop()
         super.onDestroy()
     }
 
     private fun syncEdgeHandleVisibility() {
         val shouldShow = AppPreferences.isEdgeHandleEnabled(this) && Settings.canDrawOverlays(this)
         if (shouldShow) edgeHandleOverlay.show() else edgeHandleOverlay.hide()
+        notificationManager.notify(NOTIFICATION_ID, buildNotification(lastNotificationText))
+    }
+
+    private fun syncObdState() {
+        if (AppPreferences.isObdEnabled(this)) obdManager.start() else obdManager.stop()
         notificationManager.notify(NOTIFICATION_ID, buildNotification(lastNotificationText))
     }
 
@@ -176,6 +193,20 @@ class AudioWatchService : Service() {
             if (edgeHandleEnabled) R.string.notification_action_hide_tab else R.string.notification_action_show_tab
         )
 
+        val obdEnabled = AppPreferences.isObdEnabled(this)
+        val obdToggleIntent = Intent(this, AudioWatchService::class.java).apply {
+            action = ACTION_TOGGLE_OBD
+        }
+        val obdTogglePendingIntent = PendingIntent.getService(
+            this,
+            OBD_REQUEST_CODE,
+            obdToggleIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val obdActionLabel = getString(
+            if (obdEnabled) R.string.notification_action_obd_off else R.string.notification_action_obd_on
+        )
+
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(contentText)
@@ -183,6 +214,7 @@ class AudioWatchService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .addAction(0, toggleActionLabel, togglePendingIntent)
+            .addAction(0, obdActionLabel, obdTogglePendingIntent)
             .build()
     }
 }

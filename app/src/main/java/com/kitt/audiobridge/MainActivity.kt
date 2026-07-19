@@ -1,6 +1,9 @@
 package com.kitt.audiobridge
 
+import android.annotation.SuppressLint
 import android.app.ActivityManager
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -10,10 +13,12 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.CompoundButton
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -28,6 +33,7 @@ class MainActivity : AppCompatActivity() {
         private const val FLAG_FILE_PATH = "/storage/emulated/0/KITT/parlant.txt"
         private const val REFRESH_INTERVAL_MS = 1000L
         private const val POST_NOTIFICATIONS_REQUEST_CODE = 100
+        private const val BLUETOOTH_CONNECT_REQUEST_CODE = 101
     }
 
     private lateinit var textStatusService: TextView
@@ -35,9 +41,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var textStatusState: TextView
     private lateinit var buttonToggleService: Button
     private lateinit var switchEdgeHandle: Switch
+    private lateinit var spinnerObdDevice: Spinner
+    private lateinit var switchObd: Switch
+
+    private var bondedDevices: List<BluetoothDevice> = emptyList()
 
     private val edgeHandleCheckedChangeListener =
         CompoundButton.OnCheckedChangeListener { _, isChecked -> onEdgeHandleSwitchChanged(isChecked) }
+
+    private val obdCheckedChangeListener =
+        CompoundButton.OnCheckedChangeListener { _, isChecked -> onObdSwitchChanged(isChecked) }
 
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshRunnable = object : Runnable {
@@ -91,14 +104,27 @@ class MainActivity : AppCompatActivity() {
         switchEdgeHandle.isChecked = AppPreferences.isEdgeHandleEnabled(this) && Settings.canDrawOverlays(this)
         switchEdgeHandle.setOnCheckedChangeListener(edgeHandleCheckedChangeListener)
 
+        spinnerObdDevice = findViewById(R.id.spinner_obd_device)
+        findViewById<Button>(R.id.button_save_obd_device).setOnClickListener {
+            saveSelectedObdDevice()
+        }
+
+        switchObd = findViewById(R.id.switch_obd)
+        switchObd.isChecked = AppPreferences.isObdEnabled(this)
+        switchObd.setOnCheckedChangeListener(obdCheckedChangeListener)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPostNotificationsPermission()
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requestBluetoothConnectPermission()
         }
     }
 
     override fun onResume() {
         super.onResume()
         refreshHandler.post(refreshRunnable)
+        refreshBondedDevices()
     }
 
     override fun onPause() {
@@ -114,6 +140,18 @@ class MainActivity : AppCompatActivity() {
                 this,
                 arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
                 POST_NOTIFICATIONS_REQUEST_CODE
+            )
+        }
+    }
+
+    private fun requestBluetoothConnectPermission() {
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_CONNECT)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT),
+                BLUETOOTH_CONNECT_REQUEST_CODE
             )
         }
     }
@@ -165,6 +203,86 @@ class MainActivity : AppCompatActivity() {
             switchEdgeHandle.setOnCheckedChangeListener(null)
             switchEdgeHandle.isChecked = shouldBeChecked
             switchEdgeHandle.setOnCheckedChangeListener(edgeHandleCheckedChangeListener)
+        }
+    }
+
+    private fun hasBluetoothConnectPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_CONNECT) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun refreshBondedDevices() {
+        if (!hasBluetoothConnectPermission()) {
+            bondedDevices = emptyList()
+            spinnerObdDevice.adapter = ArrayAdapter(
+                this,
+                android.R.layout.simple_spinner_dropdown_item,
+                listOf(getString(R.string.obd_device_permission_needed))
+            )
+            return
+        }
+
+        val adapter = (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+        val devices = adapter?.bondedDevices?.toList().orEmpty()
+        bondedDevices = devices
+
+        val labels = if (devices.isEmpty()) {
+            listOf(getString(R.string.obd_device_none_bonded))
+        } else {
+            devices.map { "${it.name} (${it.address})" }
+        }
+        spinnerObdDevice.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+
+        val savedAddress = AppPreferences.getObdDeviceAddress(this)
+        val savedIndex = devices.indexOfFirst { it.address == savedAddress }
+        if (savedIndex >= 0) {
+            spinnerObdDevice.setSelection(savedIndex)
+        }
+    }
+
+    private fun saveSelectedObdDevice() {
+        val index = spinnerObdDevice.selectedItemPosition
+        val device = bondedDevices.getOrNull(index)
+        if (device == null) {
+            Toast.makeText(this, R.string.toast_obd_no_device_selected, Toast.LENGTH_SHORT).show()
+            return
+        }
+        AppPreferences.setObdDeviceAddress(this, device.address)
+        Toast.makeText(this, R.string.toast_obd_device_saved, Toast.LENGTH_SHORT).show()
+
+        val intent = Intent(this, AudioWatchService::class.java).apply {
+            action = AudioWatchService.ACTION_SYNC_OBD
+        }
+        ContextCompat.startForegroundService(this, intent)
+    }
+
+    private fun onObdSwitchChanged(isChecked: Boolean) {
+        if (isChecked && AppPreferences.getObdDeviceAddress(this).isNullOrEmpty()) {
+            switchObd.setOnCheckedChangeListener(null)
+            switchObd.isChecked = false
+            switchObd.setOnCheckedChangeListener(obdCheckedChangeListener)
+            Toast.makeText(this, R.string.toast_obd_no_device_selected, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        AppPreferences.setObdEnabled(this, isChecked)
+        val intent = Intent(this, AudioWatchService::class.java).apply {
+            action = AudioWatchService.ACTION_SYNC_OBD
+        }
+        ContextCompat.startForegroundService(this, intent)
+    }
+
+    private fun syncObdSwitch() {
+        val shouldBeChecked = AppPreferences.isObdEnabled(this)
+        if (switchObd.isChecked != shouldBeChecked) {
+            switchObd.setOnCheckedChangeListener(null)
+            switchObd.isChecked = shouldBeChecked
+            switchObd.setOnCheckedChangeListener(obdCheckedChangeListener)
         }
     }
 
@@ -220,5 +338,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         syncEdgeHandleSwitch()
+        syncObdSwitch()
     }
 }

@@ -12,6 +12,9 @@ object AppPreferences {
     private const val KEY_EDGE_HANDLE_ENABLED = "edge_handle_enabled"
     private const val KEY_EDGE_HANDLE_DOCKED_RIGHT = "edge_handle_docked_right"
     private const val KEY_EDGE_HANDLE_Y = "edge_handle_y"
+    private const val KEY_OBD_DEVICE_ADDRESS = "obd_device_address"
+    private const val KEY_OBD_ENABLED = "obd_enabled"
+    private const val KEY_OBD_KM_TOTAL = "obd_km_total"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -50,5 +53,26 @@ object AppPreferences {
 
     fun setEdgeHandleY(context: Context, y: Int) {
         prefs(context).edit().putInt(KEY_EDGE_HANDLE_Y, y).apply()
+    }
+
+    fun getObdDeviceAddress(context: Context): String? =
+        prefs(context).getString(KEY_OBD_DEVICE_ADDRESS, null)
+
+    fun setObdDeviceAddress(context: Context, address: String) {
+        prefs(context).edit().putString(KEY_OBD_DEVICE_ADDRESS, address).apply()
+    }
+
+    fun isObdEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_OBD_ENABLED, false)
+
+    fun setObdEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_OBD_ENABLED, enabled).apply()
+    }
+
+    fun getObdKmTotal(context: Context): Float =
+        prefs(context).getFloat(KEY_OBD_KM_TOTAL, 0f)
+
+    fun setObdKmTotal(context: Context, km: Float) {
+        prefs(context).edit().putFloat(KEY_OBD_KM_TOTAL, km).apply()
     }
 }
