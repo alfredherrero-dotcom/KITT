@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Escaner QR a Excel</title>
+<script src="vendor/jsQR.js"></script>
+<script src="vendor/xlsx.core.min.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1216;
+    --panel: #1a1f26;
+    --text: #f2f4f7;
+    --muted: #9aa4b2;
+    --accent: #3ddc84;
+    --accent-dark: #2bb96b;
+    --danger: #e5484d;
+    --border: #2a303a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --text: #1a1f26;
+      --muted: #5b6472;
+      --border: #dde2e8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+    max-width: 720px;
+    margin-inline: auto;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  p.subtitle { color: var(--muted); margin: 0 0 16px; font-size: 0.9rem; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  .video-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    max-height: 60vh;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .video-wrap .frame {
+    position: absolute;
+    inset: 12%;
+    border: 3px solid var(--accent);
+    border-radius: 12px;
+    box-shadow: 0 0 0 2000px rgba(0,0,0,0.25);
+    pointer-events: none;
+  }
+  .video-wrap .hint {
+    position: absolute;
+    bottom: 10px;
+    left: 0; right: 0;
+    text-align: center;
+    color: #fff;
+    font-size: 0.85rem;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+  .video-wrap.idle::after {
+    content: "Camara detenida";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    background: #000;
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  button {
+    font-size: 0.95rem;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent-dark);
+    color: #06210f;
+    font-weight: 600;
+  }
+  button.primary:active { background: var(--accent-dark); }
+  button.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  #status { margin-top: 10px; font-size: 0.9rem; color: var(--muted); min-height: 1.2em; }
+  #status.ok { color: var(--accent-dark); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  td.content { word-break: break-all; }
+  td.actions { text-align: right; white-space: nowrap; }
+  td.actions a { color: var(--danger); cursor: pointer; text-decoration: underline; font-size: 0.85rem; }
+  #empty { color: var(--muted); font-size: 0.9rem; padding: 8px 0; }
+
+  .row-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .count { color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<h1>Escaner QR &rarr; Excel</h1>
+<p class="subtitle">Apunta la camara a un codigo QR. Cada lectura se guarda en la tabla y puedes descargarla como archivo Excel (.xlsx).</p>
+
+<div class="panel">
+  <div class="video-wrap idle" id="videoWrap">
+    <video id="video" playsinline muted></video>
+    <div class="frame"></div>
+    <div class="hint">Encuadra el QR dentro del marco</div>
+  </div>
+  <canvas id="canvas" style="display:none"></canvas>
+  <div class="controls">
+    <button class="primary" id="btnStart">Activar camara</button>
+    <button id="btnStop" disabled>Detener</button>
+  </div>
+  <div id="status">Camara apagada.</div>
+</div>
+
+<div class="panel">
+  <div class="row-between">
+    <strong>Lecturas guardadas</strong>
+    <span class="count" id="count">0</span>
+  </div>
+  <div id="empty">Aun no se ha escaneado ningun QR.</div>
+  <table id="table" style="display:none">
+    <thead>
+      <tr><th>#</th><th>Contenido</th><th>Fecha y hora</th><th></th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="controls">
+    <button class="primary" id="btnExport">Descargar Excel (.xlsx)</button>
+    <button class="danger" id="btnClear">Vaciar todo</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "qrExcelScannerEntries";
+  var RESCAN_COOLDOWN_MS = 3000;
+
+  var video = document.getElementById("video");
+  var canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext("2d", { willReadFrequently: true });
+  var videoWrap = document.getElementById("videoWrap");
+  var statusEl = document.getElementById("status");
+  var tbody = document.getElementById("tbody");
+  var table = document.getElementById("table");
+  var emptyEl = document.getElementById("empty");
+  var countEl = document.getElementById("count");
+  var btnStart = document.getElementById("btnStart");
+  var btnStop = document.getElementById("btnStop");
+  var btnExport = document.getElementById("btnExport");
+  var btnClear = document.getElementById("btnClear");
+
+  var stream = null;
+  var rafId = null;
+  var lastCode = null;
+  var lastCodeAt = 0;
+  var entries = loadEntries();
+
+  renderEntries();
+
+  function loadEntries() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveEntries() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    } catch (e) { /* storage full or unavailable; ignore */ }
+  }
+
+  function formatTimestamp(date) {
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return pad(date.getDate()) + "/" + pad(date.getMonth() + 1) + "/" + date.getFullYear() +
+      " " + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds());
+  }
+
+  function renderEntries() {
+    tbody.innerHTML = "";
+    if (entries.length === 0) {
+      table.style.display = "none";
+      emptyEl.style.display = "block";
+    } else {
+      table.style.display = "table";
+      emptyEl.style.display = "none";
+      entries.forEach(function (entry, index) {
+        var tr = document.createElement("tr");
+
+        var tdIndex = document.createElement("td");
+        tdIndex.textContent = String(index + 1);
+        tr.appendChild(tdIndex);
+
+        var tdContent = document.createElement("td");
+        tdContent.className = "content";
+        tdContent.textContent = entry.content;
+        tr.appendChild(tdContent);
+
+        var tdTime = document.createElement("td");
+        tdTime.textContent = entry.timestamp;
+        tr.appendChild(tdTime);
+
+        var tdActions = document.createElement("td");
+        tdActions.className = "actions";
+        var link = document.createElement("a");
+        link.textContent = "Eliminar";
+        link.addEventListener("click", function () { removeEntry(index); });
+        tdActions.appendChild(link);
+        tr.appendChild(tdActions);
+
+        tbody.appendChild(tr);
+      });
+    }
+    countEl.textContent = String(entries.length);
+  }
+
+  function removeEntry(index) {
+    entries.splice(index, 1);
+    saveEntries();
+    renderEntries();
+  }
+
+  function addEntry(content) {
+    entries.unshift({ content: content, timestamp: formatTimestamp(new Date()) });
+    saveEntries();
+    renderEntries();
+  }
+
+  function setStatus(text, ok) {
+    statusEl.textContent = text;
+    statusEl.className = ok ? "ok" : "";
+  }
+
+  function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setStatus("Este navegador no permite acceder a la camara (necesitas HTTPS o localhost).", false);
+      return;
+    }
+    setStatus("Solicitando acceso a la camara...", false);
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false
+    }).then(function (mediaStream) {
+      stream = mediaStream;
+      video.srcObject = stream;
+      return video.play();
+    }).then(function () {
+      videoWrap.classList.remove("idle");
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      setStatus("Buscando codigo QR...", false);
+      rafId = requestAnimationFrame(tick);
+    }).catch(function (err) {
+      setStatus("No se pudo abrir la camara: " + err.message, false);
+    });
+  }
+
+  function stopCamera() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    if (stream) {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      stream = null;
+    }
+    video.srcObject = null;
+    videoWrap.classList.add("idle");
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    setStatus("Camara apagada.", false);
+  }
+
+  function tick() {
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "dontInvert"
+      });
+      if (code && code.data) {
+        handleDecoded(code.data);
+      }
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function handleDecoded(content) {
+    var now = Date.now();
+    if (content === lastCode && (now - lastCodeAt) < RESCAN_COOLDOWN_MS) {
+      return;
+    }
+    lastCode = content;
+    lastCodeAt = now;
+    addEntry(content);
+    setStatus("QR detectado: " + content, true);
+    if (navigator.vibrate) navigator.vibrate(120);
+  }
+
+  function exportToExcel() {
+    if (entries.length === 0) {
+      setStatus("No hay lecturas para exportar todavia.", false);
+      return;
+    }
+    var rows = [["#", "Contenido", "Fecha y hora"]];
+    entries.forEach(function (entry, index) {
+      rows.push([index + 1, entry.content, entry.timestamp]);
+    });
+    var worksheet = XLSX.utils.aoa_to_sheet(rows);
+    worksheet["!cols"] = [{ wch: 4 }, { wch: 60 }, { wch: 20 }];
+    var workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Lecturas QR");
+    var data = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    var blob = new Blob([data], { type: "application/octet-stream" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    var stamp = formatTimestamp(new Date()).replace(/[/: ]/g, "-");
+    a.href = url;
+    a.download = "lecturas-qr-" + stamp + ".xlsx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  btnStart.addEventListener("click", startCamera);
+  btnStop.addEventListener("click", stopCamera);
+  btnExport.addEventListener("click", exportToExcel);
+  btnClear.addEventListener("click", function () {
+    if (entries.length === 0) return;
+    if (confirm("Se borraran todas las lecturas guardadas. Continuar?")) {
+      entries = [];
+      saveEntries();
+      renderEntries();
+    }
+  });
+
+  window.addEventListener("beforeunload", stopCamera);
+})();
+</script>
+</body>
+</html>
